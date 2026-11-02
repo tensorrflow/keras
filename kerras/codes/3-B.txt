@@ -1,0 +1,86 @@
+3-B: ECG Anomaly Detection Using Autoencoder
+
+import tensorflow as tf
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import accuracy_score
+from tensorflow.keras import layers, models
+
+# Load dataset
+df = pd.read_csv("ecg.csv", header=None)
+
+# Split features and labels
+X = df.iloc[:, :-1]
+y = df.iloc[:, -1]
+
+# Split data and train only on normal ECG
+x_train, x_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+x_train = x_train[y_train == 1]
+
+# Normalize data
+scaler = MinMaxScaler()
+x_train = scaler.fit_transform(x_train)
+x_test = scaler.transform(x_test)
+
+# Build autoencoder
+encoder = models.Sequential([
+    layers.Input(shape=(x_train.shape[1],)),
+    layers.Dense(64, activation="relu"),
+    layers.Dense(32, activation="relu"),
+    layers.Dense(16, activation="relu"),
+    layers.Dense(8, activation="relu")
+])
+
+decoder = models.Sequential([
+    layers.Input(shape=(8,)),
+    layers.Dense(16, activation="relu"),
+    layers.Dense(32, activation="relu"),
+    layers.Dense(64, activation="relu"),
+    layers.Dense(x_train.shape[1], activation="sigmoid")
+])
+
+model = models.Sequential([encoder, decoder])
+
+# Compile and train
+model.compile(
+    optimizer="adam",
+    loss="mean_squared_logarithmic_error",
+    metrics=["mse"]
+)
+
+history = model.fit(
+    x_train, x_train,
+    validation_split=0.1,
+    epochs=20,
+    batch_size=512
+)
+
+# Plot training and validation loss
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.xlabel("Epochs")
+plt.ylabel("MSLE Loss")
+plt.legend()
+plt.show()
+
+# Calculate threshold using normal training data
+predictions = model.predict(x_train, verbose=0)
+errors = tf.keras.losses.msle(x_train, predictions).numpy()
+threshold = np.mean(errors) + np.std(errors)
+
+# Detect anomalies in test data
+predictions = model.predict(x_test, verbose=0)
+errors = tf.keras.losses.msle(x_test, predictions).numpy()
+
+anomalies = (errors > threshold).astype(int)
+y_pred = 1 - anomalies
+
+print("Threshold:", threshold)
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("Number of anomalies:", np.sum(anomalies))

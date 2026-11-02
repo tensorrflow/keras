@@ -1,0 +1,88 @@
+#1 Import libraries and load dataset
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import confusion_matrix, classification_report
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Input, Dense
+
+df = pd.read_csv("ecg.csv", header=None)
+
+
+#2 Separate features and labels
+
+X = df.iloc[:, :-1].values
+y = df.iloc[:, -1].values
+
+# Convert labels to integers if needed
+y = y.astype(int)
+
+scaler = MinMaxScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Assumes 0 = normal and 1 = abnormal
+X_normal = X_scaled[y == 0]
+
+
+#3 Split normal data for training
+
+split = int(0.8 * len(X_normal))
+x_train = X_normal[:split]
+
+
+#4 Build and train Autoencoder
+
+model = Sequential([
+    Input(shape=(x_train.shape[1],)),
+    Dense(32, activation="relu"),
+    Dense(16, activation="relu"),
+    Dense(32, activation="relu"),
+    Dense(x_train.shape[1], activation="sigmoid")
+])
+
+model.compile(optimizer="adam", loss="mse")
+
+model.fit(
+    x_train, x_train,
+    epochs=10,
+    batch_size=32,
+    validation_split=0.1
+)
+
+
+#5 Calculate anomaly threshold
+
+train_pred = model.predict(x_train, verbose=0)
+train_error = np.mean(np.square(x_train - train_pred), axis=1)
+
+threshold = train_error.mean() + 3 * train_error.std()
+print("Anomaly Threshold:", threshold)
+
+
+#6 Detect anomalies
+
+test_pred = model.predict(X_scaled, verbose=0)
+test_error = np.mean(np.square(X_scaled - test_pred), axis=1)
+
+y_pred = (test_error > threshold).astype(int)
+
+print("Confusion Matrix:")
+print(confusion_matrix(y, y_pred))
+
+print("Classification Report:")
+print(classification_report(y, y_pred, zero_division=0))
+
+
+#7 Plot reconstruction error
+
+plt.plot(test_error)
+plt.axhline(threshold, color="red", linestyle="--")
+plt.xlabel("Sample")
+plt.ylabel("Reconstruction Error")
+plt.title("ECG Anomaly Detection")
+plt.show()
+
