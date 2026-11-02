@@ -1,0 +1,101 @@
+#1 Import libraries and load datasets
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import confusion_matrix, classification_report
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Input, Dense
+
+train_df = pd.read_csv("sign_mnist_train.csv")
+test_df = pd.read_csv("sign_mnist_test.csv")
+
+
+#2 Separate features and labels
+
+X_train = train_df.drop("label", axis=1).values
+y_train = train_df["label"].values
+
+X_test = test_df.drop("label", axis=1).values
+y_test = test_df["label"].values
+
+# Select one class as anomaly (example: label 24)
+anomaly_class = 24
+
+# Convert pixel values to range 0–1
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+# Train only on the remaining 23 classes
+X_normal = X_train[y_train != anomaly_class]
+
+
+#3 Build and train Autoencoder
+
+model = Sequential([
+    Input(shape=(784,)),
+    Dense(128, activation="relu"),
+    Dense(64, activation="relu"),
+    Dense(128, activation="relu"),
+    Dense(784, activation="sigmoid")
+])
+
+model.compile(optimizer="adam", loss="mse")
+
+model.fit(
+    X_normal, X_normal,
+    epochs=10,
+    batch_size=128,
+    validation_split=0.1
+)
+
+
+#4 Calculate reconstruction error and threshold
+
+train_pred = model.predict(X_normal, verbose=0)
+
+train_error = np.mean(
+    np.square(X_normal - train_pred),
+    axis=1
+)
+
+threshold = train_error.mean() + 3 * train_error.std()
+
+print("Anomaly Threshold:", threshold)
+
+
+#5 Detect anomalies in test data
+
+test_pred = model.predict(X_test, verbose=0)
+
+test_error = np.mean(
+    np.square(X_test - test_pred),
+    axis=1
+)
+
+# 1 = anomaly, 0 = normal
+y_pred = (test_error > threshold).astype(int)
+
+# Actual labels: 1 if selected class, otherwise 0
+y_true = (y_test == anomaly_class).astype(int)
+
+print("Confusion Matrix:")
+print(confusion_matrix(y_true, y_pred))
+
+print("Classification Report:")
+print(classification_report(y_true, y_pred, zero_division=0))
+
+
+  #6 Plot reconstruction error
+  
+  plt.figure(figsize=(10, 5))
+  plt.plot(test_error)
+  plt.axhline(threshold, color="red", linestyle="--", label="Threshold")
+  plt.xlabel("Test Sample")
+  plt.ylabel("Reconstruction Error")
+  plt.title("Sign Language MNIST Anomaly Detection")
+  plt.legend()
+  plt.show()

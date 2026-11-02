@@ -1,0 +1,138 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import confusion_matrix, classification_report
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, RepeatVector, TimeDistributed, Dense
+
+# Load dataset
+df = pd.read_csv("energy consumption.csv")
+
+# Preprocess data
+df["Timestamp"] = pd.to_datetime(df["Timestamp"], dayfirst=True)
+df = df.sort_values("Timestamp").reset_index(drop=True)
+df = df.ffill().bfill()
+
+# Select features and labels
+features = [
+    "Electricity_Consumed",
+    "Temperature",
+    "Humidity",
+    "Wind_Speed",
+    "Avg_Past_Consumption"
+]
+
+X = df[features].values
+y = df["Anomaly_Label"].values
+
+# Create time windows
+window_size = 24
+
+X_seq = []
+y_seq = []
+
+for i in range(len(X) - window_size + 1):
+    X_seq.append(X[i:i + window_size])
+    y_seq.append(int(np.any(y[i:i + window_size])))
+
+X_seq = np.array(X_seq)
+y_seq = np.array(y_seq)
+
+# Split data into training and testing sets
+split = int(0.8 * len(X_seq))
+
+x_train = X_seq[:split]
+x_test = X_seq[split:]
+
+y_train = y_seq[:split]
+y_test = y_seq[split:]
+
+# Normalize data using training data only
+scaler = MinMaxScaler()
+
+scaler.fit(x_train.reshape(-1, x_train.shape[2]))
+
+x_train = scaler.transform(
+    x_train.reshape(-1, x_train.shape[2])
+).reshape(x_train.shape)
+
+x_test = scaler.transform(
+    x_test.reshape(-1, x_test.shape[2])
+).reshape(x_test.shape)
+
+# Train only on normal windows
+x_train = x_train[y_train == 0]
+
+# Build LSTM Autoencoder
+model = Sequential([
+    LSTM(32, activation="relu", input_shape=(window_size, x_train.shape[2])),
+    RepeatVector(window_size),
+    LSTM(32, activation="relu", return_sequences=True),
+    TimeDistributed(Dense(x_train.shape[2]))
+])
+
+model.compile(optimizer="adam", loss="mse")
+
+# Train model
+history = model.fit(
+    x_train,
+    x_train,
+    epochs=10,
+    batch_size=32,
+    validation_split=0.1
+)
+
+# Plot training and validation loss
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+# Calculate reconstruction error on normal training data
+train_pred = model.predict(x_train, verbose=0)
+
+train_error = np.mean(
+    np.square(x_train - train_pred),
+    axis=(1, 2)
+)
+
+# Set anomaly threshold
+threshold = train_error.mean() + 3 * train_error.std()
+
+print("Anomaly Threshold:", threshold)
+
+# Calculate reconstruction error on test data
+test_pred = model.predict(x_test, verbose=0)
+
+test_error = np.mean(
+    np.square(x_test - test_pred),
+    axis=(1, 2)
+)
+
+# Detect anomalies
+y_pred = (test_error > threshold).astype(int)
+
+print("Detected Anomalies:", np.sum(y_pred))
+
+# Evaluate model
+print("\nConfusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+# Plot reconstruction error and threshold
+plt.figure(figsize=(10, 5))
+plt.plot(test_error, label="Reconstruction Error")
+plt.axhline(threshold, color="red", linestyle="--", label="Threshold")
+
+plt.xlabel("Test Window")
+plt.ylabel("Reconstruction Error")
+plt.title("Energy Consumption Anomaly Detection")
+plt.legend()
+plt.show()

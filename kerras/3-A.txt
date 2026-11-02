@@ -1,0 +1,105 @@
+3-A: Credit Card Fraud Detection Using Autoencoder
+
+# Install once if needed:
+# pip install pandas numpy matplotlib scikit-learn tensorflow
+
+# 1. Import libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+from tensorflow.keras import layers, models
+
+  # 2. Load dataset
+  df = pd.read_csv("creditcard(1).csv")
+  
+  print(df.head())
+  print("Dataset shape:", df.shape)
+
+# 3. Separate features and labels
+X = df.drop("Class", axis=1)
+y = df["Class"]
+
+# 4. Split into training and testing data
+x_train, x_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# 5. Keep only genuine transactions for training
+x_train = x_train[y_train == 0]
+
+# 6. Scale features
+scaler = MinMaxScaler()
+
+x_train = scaler.fit_transform(x_train)
+x_test = scaler.transform(x_test)
+
+# 7. Build Autoencoder
+encoder = models.Sequential([
+    layers.Input(shape=(x_train.shape[1],)),
+    layers.Dense(20, activation="relu"),
+    layers.Dense(14, activation="relu"),
+    layers.Dense(8, activation="relu"),
+    layers.Dense(4, activation="relu")
+])
+
+decoder = models.Sequential([
+    layers.Input(shape=(4,)),
+    layers.Dense(8, activation="relu"),
+    layers.Dense(14, activation="relu"),
+    layers.Dense(20, activation="relu"),
+    layers.Dense(x_train.shape[1], activation="sigmoid")
+])
+
+autoencoder = models.Sequential([encoder, decoder])
+
+# 8. Compile model
+autoencoder.compile(
+    optimizer="adam",
+    loss="mse",
+    metrics=["mae"]
+)
+
+# 9. Train autoencoder on genuine transactions
+history = autoencoder.fit(
+    x_train, x_train,
+    epochs=20,
+    batch_size=512,
+    validation_split=0.1,
+    shuffle=True
+)
+
+# 10. Plot training loss
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+# 11. Calculate reconstruction errors on training data
+train_reconstructed = autoencoder.predict(x_train, verbose=0)
+train_errors = np.mean(np.square(x_train - train_reconstructed), axis=1)
+
+# Set threshold using mean + standard deviation
+threshold = np.mean(train_errors) + np.std(train_errors)
+print("Reconstruction Error Threshold:", threshold)
+
+# 12. Predict fraud on test data
+test_reconstructed = autoencoder.predict(x_test, verbose=0)
+test_errors = np.mean(np.square(x_test - test_reconstructed), axis=1)
+
+# Error above threshold = fraud
+y_pred = (test_errors > threshold).astype(int)
+
+  # 13. Evaluate model
+  print("\nAccuracy:", accuracy_score(y_test, y_pred))
+  print("\nConfusion Matrix:")
+  print(confusion_matrix(y_test, y_pred))
+  
+  print("\nClassification Report:")
+  print(classification_report(y_test, y_pred, zero_division=0))

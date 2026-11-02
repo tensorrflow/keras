@@ -1,0 +1,117 @@
+5A. Object Detection Using Transfer Learning with VGG16
+
+# 1. Import libraries
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.applications import VGG16
+from tensorflow.keras.applications.vgg16 import preprocess_input
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Dense, Flatten, Dropout
+from tensorflow.keras.optimizers import Adam
+
+# 2. Load and preprocess dataset
+path = r"C:\Users\ombah\OmCore\BE Practical\LP-4 (Deep Learning)\LP IV Updated Datasets\Object Detection\caltech-101"
+
+datagen = ImageDataGenerator(
+    preprocessing_function=preprocess_input,
+    validation_split=0.2
+)
+
+train_data = datagen.flow_from_directory(
+    path,
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode="categorical",
+    subset="training"
+)
+
+val_data = datagen.flow_from_directory(
+    path,
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode="categorical",
+    subset="validation"
+)
+
+# 3. Load pre-trained VGG16 model
+base_model = VGG16(
+    weights="imagenet",
+    include_top=False,
+    input_shape=(224, 224, 3)
+)
+
+# 4. Freeze base layers
+base_model.trainable = False
+
+# 5. Add custom classification layers
+x = Flatten()(base_model.output)
+
+x = Dense(256, activation="relu")(x)
+
+x = Dropout(0.5)(x)
+
+output = Dense(
+    train_data.num_classes,
+    activation="softmax"
+)(x)
+
+model = Model(base_model.input, output)
+
+# 6. Compile the model
+model.compile(
+    optimizer=Adam(learning_rate=0.001),
+    loss="categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# 7. Train the model
+history = model.fit(
+    train_data,
+    validation_data=val_data,
+    epochs=2,
+    steps_per_epoch=50,
+    validation_steps=10
+)
+
+# 8. Evaluate the model
+loss, accuracy = model.evaluate(val_data)
+
+print("Validation Loss:", loss)
+print("Validation Accuracy:", accuracy)
+
+# 9. Visualize training accuracy
+plt.plot(history.history["accuracy"], label="Training Accuracy")
+plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+
+plt.xlabel("Epochs")
+plt.ylabel("Accuracy")
+plt.title("Model Accuracy")
+plt.legend()
+plt.show()
+
+# 10. Visualize training loss
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.title("Model Loss")
+plt.legend()
+plt.show()
+
+# 11. Visualize prediction
+img, label = next(val_data)
+
+prediction = model.predict(img[:1])
+
+class_index = np.argmax(prediction[0])
+
+class_names = list(train_data.class_indices.keys())
+
+plt.imshow(img[0] / 255.0)
+plt.title("Predicted: " + class_names[class_index])
+plt.axis("off")
+plt.show()
