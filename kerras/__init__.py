@@ -1,6 +1,9 @@
 from pathlib import Path
 
 def get_code_files():
-    """Return the available Deep Learning code files."""
+    """Return the available TXT and PDF files."""
     folder = Path(__file__).parent / "codes"
-    return list(folder.glob("*.txt"))
+    return sorted(
+        file for file in folder.iterdir()
+        if file.suffix.lower() in {".txt", ".pdf"}
+    )
