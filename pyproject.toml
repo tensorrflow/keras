@@ -10,4 +10,8 @@ readme = "README.md"
 requires-python = ">=3.9"
 
 [tool.setuptools]
-packages = []
+packages = ["kerras"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+kerras = ["codes/*.txt", "codes/*.pdf"]
