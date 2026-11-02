@@ -1,0 +1,72 @@
+# Practical 1-B: Feedforward Neural Network (FNN) for Fashion MNIST
+
+# 1. Import necessary packages
+import pandas as pd
+import matplotlib.pyplot as plt
+import tensorflow as tf
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Dense
+
+# 2. Load training and testing data
+train_data = pd.read_csv("fashion-mnist_train.csv")
+test_data = pd.read_csv("fashion-mnist_test.csv")
+
+# 3. Separate labels and pixel values
+y_train = train_data.iloc[:, 0].values
+X_train = train_data.iloc[:, 1:].values
+
+y_test = test_data.iloc[:, 0].values
+X_test = test_data.iloc[:, 1:].values
+
+# 4. Normalize pixel values
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+# 5. Define the FNN architecture
+model = Sequential([
+    Dense(128, activation="relu", input_shape=(784,)),
+    Dense(10, activation="softmax")
+])
+
+# Display model architecture
+model.summary()
+
+# 6. Compile the model using SGD
+model.compile(
+    optimizer="sgd",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# 7. Train the model
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=32,
+    validation_split=0.1
+)
+
+# 8. Evaluate the model on test data
+test_loss, test_accuracy = model.evaluate(X_test, y_test, verbose=0)
+
+print("Test Loss:", test_loss)
+print("Test Accuracy:", test_accuracy)
+
+# 9. Plot training and validation loss
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.title("Fashion MNIST - Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.show()
+
+# 10. Plot training and validation accuracy
+plt.plot(history.history["accuracy"], label="Training Accuracy")
+plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+plt.title("Fashion MNIST - Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+plt.show()

@@ -1,0 +1,128 @@
+#1 Import libraries and load dataset
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import confusion_matrix, classification_report
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Input, LSTM, RepeatVector, TimeDistributed, Dense
+
+df = pd.read_csv("NASA TurboFan Engine.csv")
+df = df.sort_values(["unit", "cycle"]).reset_index(drop=True)
+
+features = [col for col in df.columns if col.startswith("sensor")]
+
+
+#2 Create time windows and split data
+
+window_size = 24
+
+X_seq = []
+y_seq = []
+
+for unit in df["unit"].unique():
+    unit_data = df[df["unit"] == unit]
+    unit_X = unit_data[features].values
+    unit_y = unit_data["Fault_Label"].values
+
+    for i in range(len(unit_X) - window_size + 1):
+        X_seq.append(unit_X[i:i + window_size])
+        y_seq.append(int(np.any(unit_y[i:i + window_size])))
+
+X_seq = np.array(X_seq)
+y_seq = np.array(y_seq)
+
+split = int(0.8 * len(X_seq))
+
+x_train = X_seq[:split]
+x_test = X_seq[split:]
+
+y_train = y_seq[:split]
+y_test = y_seq[split:]
+
+
+#3 Scale sensor readings and select healthy windows
+
+scaler = MinMaxScaler()
+scaler.fit(x_train.reshape(-1, x_train.shape[2]))
+
+x_train = scaler.transform(
+    x_train.reshape(-1, x_train.shape[2])
+).reshape(x_train.shape)
+
+x_test = scaler.transform(
+    x_test.reshape(-1, x_test.shape[2])
+).reshape(x_test.shape)
+
+x_train = x_train[y_train == 0]
+
+
+#4 Build and train LSTM Autoencoder
+
+model = Sequential([
+    Input(shape=(window_size, x_train.shape[2])),
+    LSTM(32, activation="relu"),
+    RepeatVector(window_size),
+    LSTM(32, activation="relu", return_sequences=True),
+    TimeDistributed(Dense(x_train.shape[2]))
+])
+
+model.compile(optimizer="adam", loss="mse")
+
+history = model.fit(
+    x_train,
+    x_train,
+    epochs=10,
+    batch_size=32,
+    validation_split=0.1
+)
+
+
+#5 Calculate reconstruction error and threshold
+
+train_pred = model.predict(x_train, verbose=0)
+
+train_error = np.mean(
+    np.square(x_train - train_pred),
+    axis=(1, 2)
+)
+
+threshold = train_error.mean() + 3 * train_error.std()
+
+print("Fault Threshold:", threshold)
+
+
+#6 Detect faults and evaluate model
+
+test_pred = model.predict(x_test, verbose=0)
+
+test_error = np.mean(
+    np.square(x_test - test_pred),
+    axis=(1, 2)
+)
+
+y_pred = (test_error > threshold).astype(int)
+
+print("Detected Faults:", np.sum(y_pred))
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+
+print("Classification Report:")
+print(classification_report(y_test, y_pred, zero_division=0))
+
+
+#7 Plot reconstruction error
+
+plt.figure(figsize=(10, 5))
+
+plt.plot(test_error, label="Reconstruction Error")
+plt.axhline(threshold, color="red", linestyle="--", label="Fault Threshold")
+
+plt.xlabel("Test Window")
+plt.ylabel("Reconstruction Error")
+plt.title("NASA Turbofan Engine Fault Detection")
+plt.legend()
+plt.show()

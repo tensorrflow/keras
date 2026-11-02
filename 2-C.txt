@@ -1,0 +1,103 @@
+2-C: CNN for Sign Language MNIST classification
+
+# 1. Import libraries
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D
+from tensorflow.keras.layers import Flatten, Dense
+
+# 2. Load training and testing datasets
+train_data = pd.read_csv("sign_mnist_train.csv")
+test_data = pd.read_csv("sign_mnist_test.csv")
+
+# 3. Separate images and labels
+X_train = train_data.iloc[:, 1:].values
+y_train = train_data.iloc[:, 0].values
+
+X_test = test_data.iloc[:, 1:].values
+y_test = test_data.iloc[:, 0].values
+
+print("Training data:", X_train.shape)
+print("Testing data:", X_test.shape)
+
+# 4. Normalize pixel values
+X_train = X_train / 255.0
+X_test = X_test / 255.0
+
+# 5. Reshape images to 28x28 pixels with 1 channel
+X_train = X_train.reshape(-1, 28, 28, 1)
+X_test = X_test.reshape(-1, 28, 28, 1)
+
+# 6. Define the CNN model
+model = Sequential([
+    Conv2D(32, (3, 3), activation="relu",
+           input_shape=(28, 28, 1)),
+    MaxPooling2D((2, 2)),
+    Flatten(),
+    Dense(128, activation="relu"),
+    Dense(25, activation="softmax")
+])
+
+# Display model architecture
+model.summary()
+
+# 7. Compile the model
+model.compile(
+    optimizer="adam",
+    loss="sparse_categorical_crossentropy",
+    metrics=["accuracy"]
+)
+
+# 8. Train the model
+history = model.fit(
+    X_train, y_train,
+    epochs=5,
+    batch_size=32,
+    validation_split=0.1
+)
+
+# 9. Evaluate using the separate test dataset
+loss, accuracy = model.evaluate(X_test, y_test)
+
+print("Test Loss:", loss)
+print("Test Accuracy:", accuracy * 100, "%")
+
+  # 10. Plot training and validation accuracy and loss
+  plt.figure(figsize=(12, 4))
+  
+  # Accuracy graph
+  plt.subplot(1, 2, 1)
+  plt.plot(history.history["accuracy"], label="Training Accuracy")
+  plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+  plt.title("Model Accuracy")
+  plt.xlabel("Epoch")
+  plt.ylabel("Accuracy")
+  plt.legend()
+  
+  # Loss graph
+  plt.subplot(1, 2, 2)
+  plt.plot(history.history["loss"], label="Training Loss")
+  plt.plot(history.history["val_loss"], label="Validation Loss")
+  plt.title("Model Loss")
+  plt.xlabel("Epoch")
+  plt.ylabel("Loss")
+  plt.legend()
+  
+  plt.tight_layout()
+  plt.show()
+  
+  # 11. Predict a sample image
+  index = 0
+  
+  prediction = model.predict(X_test[index:index+1])
+  predicted_label = np.argmax(prediction)
+  
+  plt.imshow(X_test[index].reshape(28, 28), cmap="gray")
+  plt.title(
+      f"Predicted Label: {predicted_label}, Actual Label: {y_test[index]}"
+  )
+  plt.axis("off")
+  plt.show()

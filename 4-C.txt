@@ -1,0 +1,57 @@
+# Install once if needed:
+# pip install gensim
+
+# 1. Import libraries
+import re
+from gensim.models import Word2Vec
+
+# 2. Enter the given textual document
+text = """
+The speed of transmission is an important point of difference between the two viruses.
+Influenza has a shorter median incubation period and a shorter serial interval than COVID-19.
+The serial interval for COVID-19 virus is estimated to be 5-6 days, while for influenza virus,
+the serial interval is 3 days. This means that influenza can spread faster than COVID-19.
+
+Further, transmission in the first 3-5 days of illness, or potentially pre-symptomatic
+transmission, is a major driver of transmission for influenza. In contrast, while there are
+people who can shed COVID-19 virus 24-48 hours prior to symptom onset, this does not appear
+to be a major driver of transmission.
+
+The reproductive number is understood to be between 2 and 2.5 for COVID-19 virus,
+higher than for influenza. However, estimates for both COVID-19 and influenza viruses
+are very context and time-specific, making direct comparisons more difficult.
+"""
+
+# 3. Clean and tokenize the document
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(r"[^a-z\s]", " ", text)
+    return text.split()
+
+sentences = [clean_text(text)]
+
+# 4. Train CBOW Word2Vec model (sg=0 means CBOW)
+cbow_model = Word2Vec(
+    sentences=sentences,
+    vector_size=50,
+    window=3,
+    min_count=1,
+    sg=0,
+    workers=1,
+    epochs=100
+)
+
+# 5. Display vocabulary size
+print("Vocabulary Size:", len(cbow_model.wv))
+
+# 6. Display the embedding of a word
+word = "influenza"
+
+if word in cbow_model.wv:
+    print("Embedding for", word, ":")
+    print(cbow_model.wv[word])
+
+  # 7. Find similar words
+  if word in cbow_model.wv:
+      print("Similar words to", word, ":")
+      print(cbow_model.wv.most_similar(word, topn=5))
